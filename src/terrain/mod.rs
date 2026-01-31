@@ -56,6 +56,21 @@ pub struct Terrain {
     data: HashMap<(i16, i16), TerrainData>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TerrainFileKind {
+    Dted,
+    GeoTiff,
+}
+
+impl TerrainFileKind {
+    fn name(self) -> &'static str {
+        match self {
+            TerrainFileKind::Dted => "DTED",
+            TerrainFileKind::GeoTiff => "GeoTIFF",
+        }
+    }
+}
+
 impl Terrain {
     pub fn new() -> Self {
         Terrain {
@@ -82,6 +97,51 @@ impl Terrain {
         terrain
     }
 
+    fn kind_for_buffered_path(path: &PathBuf) -> TerrainFileKind {
+        if read_dted_header(path).is_ok() {
+            TerrainFileKind::Dted
+        } else {
+            // This is only called after the file was already accepted as a GeoTIFF candidate.
+            TerrainFileKind::GeoTiff
+        }
+    }
+
+    fn ensure_no_mixed_format_conflict(
+        &self,
+        key: (i16, i16),
+        new_kind: TerrainFileKind,
+        new_path: &PathBuf,
+    ) {
+        let Some(existing) = self.data.get(&key) else {
+            return;
+        };
+
+        let (existing_kind, existing_path) = match &*existing.0.read().unwrap() {
+            TerrainDataInner::Pending(path) => {
+                (Self::kind_for_buffered_path(path), Some(path.clone()))
+            }
+            TerrainDataInner::Loaded(_) => {
+                panic!(
+                    "Conflicting terrain tile for {:?}: attempted to buffer {} file {:?}, but a tile was already loaded for that cell",
+                    key,
+                    new_kind.name(),
+                    new_path
+                );
+            }
+        };
+
+        if existing_kind != new_kind {
+            panic!(
+                "Conflicting terrain tile for {:?}: both {} and {} files are present (existing: {:?}, new: {:?}). Remove one of them.",
+                key,
+                existing_kind.name(),
+                new_kind.name(),
+                existing_path,
+                new_path
+            );
+        }
+    }
+
     fn buffer_dted(&mut self, path: PathBuf) -> bool {
         let header = if let Ok(hdr) = read_dted_header(&path) {
             hdr
@@ -90,6 +150,9 @@ impl Terrain {
         };
         let lat = f64::from(header.origin_lat) as i16;
         let lon = f64::from(header.origin_lon) as i16;
+
+        self.ensure_no_mixed_format_conflict((lat, lon), TerrainFileKind::Dted, &path);
+
         let _ = self.data.insert(
             (lat, lon),
             TerrainData(RwLock::new(TerrainDataInner::Pending(path))),
@@ -103,6 +166,9 @@ impl Terrain {
         } else {
             return false;
         };
+
+        self.ensure_no_mixed_format_conflict((lat, lon), TerrainFileKind::GeoTiff, &path);
+
         let _ = self.data.insert(
             (lat, lon),
             TerrainData(RwLock::new(TerrainDataInner::Pending(path))),
