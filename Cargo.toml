@@ -10,7 +10,6 @@ bincode = "1.2"
 clap = "2.0"
 dted = "0.2"
 fltk = "1.1"
-geotiff-rs = "0.1"
 image = "0.24"
 imageproc = "0.23"
 lazy_static = "1.4"
@@ -22,6 +21,7 @@ rusttype = "0.9"
 serde = "1.0"
 serde_derive = "1.0"
 serde_yaml = "0.8"
+tiff = "0.9"
 
 [features]
 default = ["atm-refraction/serialization", "nalgebra/serde-serialize"]
