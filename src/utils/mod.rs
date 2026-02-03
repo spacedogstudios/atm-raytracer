@@ -22,9 +22,9 @@ pub fn rgb_to_vec3(rgb: Rgb<u8>) -> Vector3<f64> {
 
 #[allow(clippy::many_single_char_names)]
 pub fn vec3_to_rgb(v: Vector3<f64>) -> Rgb<u8> {
-    let r = (v[0] * 255.0) as u8;
-    let g = (v[1] * 255.0) as u8;
-    let b = (v[2] * 255.0) as u8;
+    let r = (v[0].clamp(0.0, 1.0) * 255.0).round() as u8;
+    let g = (v[1].clamp(0.0, 1.0) * 255.0).round() as u8;
+    let b = (v[2].clamp(0.0, 1.0) * 255.0).round() as u8;
     Rgb([r, g, b])
 }
 
@@ -39,9 +39,9 @@ pub fn rgba_to_vec4(rgba: Rgba<u8>) -> Vector4<f64> {
 
 #[allow(clippy::many_single_char_names)]
 pub fn vec4_to_rgba(v: Vector4<f64>) -> Rgba<u8> {
-    let r = (v[0] * 255.0) as u8;
-    let g = (v[1] * 255.0) as u8;
-    let b = (v[2] * 255.0) as u8;
-    let a = (v[3] * 255.0) as u8;
+    let r = (v[0].clamp(0.0, 1.0) * 255.0).round() as u8;
+    let g = (v[1].clamp(0.0, 1.0) * 255.0).round() as u8;
+    let b = (v[2].clamp(0.0, 1.0) * 255.0).round() as u8;
+    let a = (v[3].clamp(0.0, 1.0) * 255.0).round() as u8;
     Rgba([r, g, b, a])
 }

@@ -381,12 +381,20 @@ impl GeoTiffWrapper {
         }
 
         let idx = y * self.width + x;
+
+        // Many GeoTIFF DEM exports encode missing/ocean pixels as extreme sentinels
+        // (e.g. -999999). Treat those as NoData to avoid bogus terrain intersections.
+        fn sanitize(v: f64) -> Option<f64> {
+            // +/- 50km is well outside any plausible terrain elevation in meters.
+            (v.is_finite() && (-50_000.0..=50_000.0).contains(&v)).then_some(v)
+        }
+
         match &self.data {
-            RasterData::I16(v) => Some(v[idx] as f64),
-            RasterData::U16(v) => Some(v[idx] as f64),
-            RasterData::I32(v) => Some(v[idx] as f64),
-            RasterData::U32(v) => Some(v[idx] as f64),
-            RasterData::F32(v) => Some(v[idx] as f64),
+            RasterData::I16(v) => sanitize(v[idx] as f64),
+            RasterData::U16(v) => sanitize(v[idx] as f64),
+            RasterData::I32(v) => sanitize(v[idx] as f64),
+            RasterData::U32(v) => sanitize(v[idx] as f64),
+            RasterData::F32(v) => sanitize(v[idx] as f64),
         }
     }
 }

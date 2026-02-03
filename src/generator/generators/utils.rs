@@ -25,10 +25,19 @@ pub fn find_normal(model: &EarthModel, lat: f64, lon: f64, terrain: &Terrain) ->
 
     let (dir_north, dir_east, dir_up) = model.world_directions(lat, lon);
 
-    let diff_ew = terrain.get_elev(p_east.0, p_east.1).unwrap_or(0.0)
-        - terrain.get_elev(p_west.0, p_west.1).unwrap_or(0.0);
-    let diff_ns = terrain.get_elev(p_north.0, p_north.1).unwrap_or(0.0)
-        - terrain.get_elev(p_south.0, p_south.1).unwrap_or(0.0);
+    // If we don't have terrain data at the center point (e.g. missing tiles), avoid inventing
+    // a slope against 0.0 which can create strong banding artifacts in shading.
+    let Some(center_elev) = terrain.get_elev(lat, lon) else {
+        return dir_up;
+    };
+
+    let east_elev = terrain.get_elev(p_east.0, p_east.1).unwrap_or(center_elev);
+    let west_elev = terrain.get_elev(p_west.0, p_west.1).unwrap_or(center_elev);
+    let north_elev = terrain.get_elev(p_north.0, p_north.1).unwrap_or(center_elev);
+    let south_elev = terrain.get_elev(p_south.0, p_south.1).unwrap_or(center_elev);
+
+    let diff_ew = east_elev - west_elev;
+    let diff_ns = north_elev - south_elev;
 
     let vec_ns = 2.0 * DIFF * dir_north + diff_ns * dir_up;
     let vec_ew = 2.0 * DIFF * dir_east + diff_ew * dir_up;

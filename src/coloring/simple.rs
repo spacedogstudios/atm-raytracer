@@ -8,13 +8,15 @@ use image::Rgb;
 pub struct SimpleColors {
     max_distance: f64,
     water_level: f64,
+    water_level_epsilon: f64,
 }
 
 impl SimpleColors {
-    pub fn new(max_distance: f64, water_level: f64) -> Self {
+    pub fn new(max_distance: f64, water_level: f64, water_level_epsilon: f64) -> Self {
         Self {
             max_distance,
             water_level,
+            water_level_epsilon,
         }
     }
 }
@@ -22,9 +24,9 @@ impl SimpleColors {
 impl ColoringMethod for SimpleColors {
     fn color_for_pixel(&self, pixel: &TracePoint) -> Rgb<u8> {
         let dist_ratio = pixel.distance / self.max_distance;
-        if pixel.elevation <= self.water_level {
+        if pixel.elevation <= self.water_level + self.water_level_epsilon {
             let mul = 1.0 - dist_ratio * 0.6;
-            Rgb([0, (128.0 * mul) as u8, (255.0 * mul) as u8])
+            Rgb([0, (128.0 * mul).round() as u8, (255.0 * mul).round() as u8])
         } else {
             let elev_ratio = pixel.elevation / 4500.0;
             let h = 120.0
@@ -80,8 +82,8 @@ fn hsv(h: f64, s: f64, v: f64) -> Rgb<u8> {
     };
 
     Rgb([
-        ((rp + m) * 255.0) as u8,
-        ((gp + m) * 255.0) as u8,
-        ((bp + m) * 255.0) as u8,
+        ((rp + m).clamp(0.0, 1.0) * 255.0).round() as u8,
+        ((gp + m).clamp(0.0, 1.0) * 255.0).round() as u8,
+        ((bp + m).clamp(0.0, 1.0) * 255.0).round() as u8,
     ])
 }

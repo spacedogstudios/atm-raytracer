@@ -5,6 +5,7 @@ mod generator;
 mod object;
 mod ray_path;
 mod renderer;
+mod stats;
 mod terrain;
 mod utils;
 mod viewer;
@@ -22,6 +23,7 @@ fn main() {
         .subcommand(atm_printer::subcommand_def())
         .subcommand(ray_path::subcommand_def())
         .subcommand(elev_profile::subcommand_def())
+        .subcommand(stats::subcommand_def())
         .get_matches();
 
     let result = match matches.subcommand() {
@@ -30,6 +32,7 @@ fn main() {
         (atm_printer::SUBCOMMAND, Some(matches)) => atm_printer::run(matches),
         (ray_path::SUBCOMMAND, Some(matches)) => ray_path::run(matches),
         (elev_profile::SUBCOMMAND, Some(matches)) => elev_profile::run(matches),
+        (stats::SUBCOMMAND, Some(matches)) => stats::run(matches),
         _ => panic!("Unknown subcommand!"),
     };
 

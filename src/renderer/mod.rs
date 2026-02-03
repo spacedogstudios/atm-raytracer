@@ -385,6 +385,79 @@ fn add(rgb1: Rgb<u8>, rgb2: Rgb<u8>, a: f64) -> Rgb<u8> {
 pub fn draw_image(pixels: &[Vec<ResultPixel>], params: &Params) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let mut img = ImageBuffer::new(params.output.width as u32, params.output.height as u32);
     let coloring = params.view.coloring.coloring_method();
+
+    // Some DEMs have coastline/interpolation artifacts where sea pixels end up slightly above
+    // sea level (e.g. +0.89m everywhere). We treat elevations within WATER_LEVEL_EPS_M above
+    // `water_level` as water *unless* they touch definite land (> water_level + eps).
+    let (water_level, water_level_epsilon) = match params.view.coloring {
+        crate::generator::params::Coloring::Simple {
+            water_level,
+            water_level_epsilon,
+            ..
+        }
+        | crate::generator::params::Coloring::Shading {
+            water_level,
+            water_level_epsilon,
+            ..
+        } => (water_level, water_level_epsilon),
+    };
+    let water_level_effective = water_level + water_level_epsilon;
+
+    let w = params.output.width as usize;
+    let h = params.output.height as usize;
+    let mut first_terrain_elev: Vec<Vec<Option<f64>>> = vec![vec![None; w]; h];
+    for y in 0..h {
+        for x in 0..w {
+            let Some(tp) = pixels[y][x].trace_points.first() else {
+                continue;
+            };
+            if matches!(tp.color, crate::generator::PixelColor::Terrain(_)) {
+                first_terrain_elev[y][x] = Some(tp.elevation);
+            }
+        }
+    }
+
+    let mut strict_land: Vec<Vec<bool>> = vec![vec![false; w]; h];
+    let mut near_band: Vec<Vec<bool>> = vec![vec![false; w]; h];
+    for y in 0..h {
+        for x in 0..w {
+            let Some(e) = first_terrain_elev[y][x] else {
+                continue;
+            };
+            if e > water_level_effective {
+                strict_land[y][x] = true;
+            } else if water_level_epsilon > 0.0 && e > water_level && e <= water_level_effective {
+                near_band[y][x] = true;
+            }
+        }
+    }
+
+    let mut near_band_should_be_land: Vec<Vec<bool>> = vec![vec![false; w]; h];
+    for y in 0..h {
+        for x in 0..w {
+            if !near_band[y][x] {
+                continue;
+            }
+            let y0 = y.saturating_sub(1);
+            let y1 = (y + 1).min(h - 1);
+            let x0 = x.saturating_sub(1);
+            let x1 = (x + 1).min(w - 1);
+            let mut touches_land = false;
+            'nb: for yy in y0..=y1 {
+                for xx in x0..=x1 {
+                    if yy == y && xx == x {
+                        continue;
+                    }
+                    if strict_land[yy][xx] {
+                        touches_land = true;
+                        break 'nb;
+                    }
+                }
+            }
+            near_band_should_be_land[y][x] = touches_land;
+        }
+    }
+
     let def_color = if params.view.fog_distance.is_some() {
         coloring.fog_color()
         //Rgb([160, 160, 160])
@@ -396,15 +469,27 @@ pub fn draw_image(pixels: &[Vec<ResultPixel>], params: &Params) -> ImageBuffer<R
         let mut result = Rgb([0, 0, 0]);
         let mut accum_neg_alpha = 1.0;
 
-        for pixel in &pixels[y as usize][x as usize].trace_points {
-            let color1 = coloring.color_for_pixel(pixel);
+        for (idx, pixel) in pixels[y as usize][x as usize].trace_points.iter().enumerate() {
+            // Apply near-water shoreline rule to the *first* terrain hit only.
+            let mut pixel_for_coloring = *pixel;
+            if idx == 0
+                && near_band_should_be_land[y as usize][x as usize]
+                && matches!(pixel_for_coloring.color, crate::generator::PixelColor::Terrain(_))
+                && pixel_for_coloring.elevation > water_level
+                && pixel_for_coloring.elevation <= water_level_effective
+            {
+                // Force it over the threshold so coloring treats it as land.
+                pixel_for_coloring.elevation = water_level_effective + 1e-6;
+            }
+
+            let color1 = coloring.color_for_pixel(&pixel_for_coloring);
             let color2 = if let Some(fog_dist) = params.view.fog_distance {
-                fog(fog_dist, pixel.path_length, color1)
+                fog(fog_dist, pixel_for_coloring.path_length, color1)
             } else {
                 color1
             };
-            result = add(result, color2, accum_neg_alpha * pixel.color.alpha());
-            accum_neg_alpha *= 1.0 - pixel.color.alpha();
+            result = add(result, color2, accum_neg_alpha * pixel_for_coloring.color.alpha());
+            accum_neg_alpha *= 1.0 - pixel_for_coloring.color.alpha();
         }
 
         *px = add(result, def_color, accum_neg_alpha);
@@ -416,7 +501,11 @@ pub fn draw_image(pixels: &[Vec<ResultPixel>], params: &Params) -> ImageBuffer<R
 pub fn output_image(pixels: &[Vec<ResultPixel>], params: &Params, terrain: &Terrain) {
     let mut img = draw_image(pixels, params);
 
-    draw_ticks(&mut img, params, pixels);
+    if params.output.show_ticks
+        && (!params.output.ticks.is_empty() || !params.output.vertical_ticks.is_empty())
+    {
+        draw_ticks(&mut img, params, pixels);
+    }
     if params.output.show_flat_horizon
         && matches!(params.env.shape, EarthShape::Flat)
         && !params.straight_rays

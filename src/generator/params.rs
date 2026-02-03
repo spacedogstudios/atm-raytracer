@@ -177,10 +177,14 @@ pub enum ConfColoring {
     Simple {
         #[serde(default)]
         water_level: f64,
+        #[serde(default = "default_water_level_epsilon")]
+        water_level_epsilon: f64,
     },
     Shading {
         #[serde(default)]
         water_level: f64,
+        #[serde(default = "default_water_level_epsilon")]
+        water_level_epsilon: f64,
         #[serde(default = "default_ambient_light")]
         ambient_light: f64,
         #[serde(default = "default_zenith_angle")]
@@ -190,6 +194,10 @@ pub enum ConfColoring {
         #[serde(default)]
         palette: ColorPalette,
     },
+}
+
+fn default_water_level_epsilon() -> f64 {
+    0.0
 }
 
 fn default_ambient_light() -> f64 {
@@ -204,6 +212,7 @@ impl Default for ConfColoring {
     fn default() -> Self {
         ConfColoring::Shading {
             water_level: 0.0,
+            water_level_epsilon: default_water_level_epsilon(),
             ambient_light: default_ambient_light(),
             light_zenith_angle: default_zenith_angle(),
             light_dir: 0.0,
@@ -216,10 +225,12 @@ impl Default for ConfColoring {
 pub enum Coloring {
     Simple {
         water_level: f64,
+        water_level_epsilon: f64,
         max_distance: f64,
     },
     Shading {
         water_level: f64,
+        water_level_epsilon: f64,
         ambient_light: f64,
         light_dir: Vector3<f64>,
         palette: ColorPalette,
@@ -234,12 +245,17 @@ impl ConfColoring {
         earth_model: &EarthModel,
     ) -> Coloring {
         match self {
-            ConfColoring::Simple { water_level } => Coloring::Simple {
+            ConfColoring::Simple {
                 water_level,
+                water_level_epsilon,
+            } => Coloring::Simple {
+                water_level,
+                water_level_epsilon,
                 max_distance: frame.max_distance,
             },
             ConfColoring::Shading {
                 water_level,
+                water_level_epsilon,
                 ambient_light,
                 light_zenith_angle,
                 light_dir,
@@ -258,6 +274,7 @@ impl ConfColoring {
                 .normalize();
                 Coloring::Shading {
                     water_level,
+                    water_level_epsilon,
                     ambient_light,
                     light_dir,
                     palette,
@@ -272,14 +289,22 @@ impl Coloring {
         match *self {
             Coloring::Simple {
                 water_level,
+                water_level_epsilon,
                 max_distance,
-            } => Box::new(SimpleColors::new(max_distance, water_level)),
+            } => Box::new(SimpleColors::new(max_distance, water_level, water_level_epsilon)),
             Coloring::Shading {
                 water_level,
+                water_level_epsilon,
                 ambient_light,
                 light_dir,
                 palette,
-            } => Box::new(Shading::new(water_level, ambient_light, light_dir, palette)),
+            } => Box::new(Shading::new(
+                water_level,
+                water_level_epsilon,
+                ambient_light,
+                light_dir,
+                palette,
+            )),
         }
     }
 }
@@ -404,6 +429,8 @@ pub struct Output {
     pub ticks: Vec<Tick>,
     #[serde(default)]
     pub vertical_ticks: Vec<VerticalTick>,
+    #[serde(default = "default_show_ticks")]
+    pub show_ticks: bool,
     #[serde(default)]
     pub show_eye_level: bool,
     #[serde(default)]
@@ -428,6 +455,10 @@ fn default_generator() -> GeneratorDef {
     GeneratorDef::Fast
 }
 
+fn default_show_ticks() -> bool {
+    true
+}
+
 impl Default for Output {
     fn default() -> Output {
         Output {
@@ -437,6 +468,7 @@ impl Default for Output {
             height: default_height(),
             ticks: Vec::new(),
             vertical_ticks: Vec::new(),
+            show_ticks: default_show_ticks(),
             show_eye_level: false,
             show_flat_horizon: false,
             generator: default_generator(),

@@ -24,6 +24,9 @@ impl ColorPalette {
     fn water_color(&self) -> Vector3<f64> {
         match self {
             ColorPalette::Legacy => Vector3::new(0.0, 0.5, 1.0),
+            // Match the existing look used by the default (Improved) palette.
+            // Note: even though this matches the sky base color, terrain/water get shaded by
+            // lighting while sky does not, so the visible result still differs.
             ColorPalette::Improved => Vector3::new(0.23, 0.41, 0.55),
         }
     }
@@ -85,6 +88,7 @@ impl ColorPalette {
 #[derive(Debug, Clone, Copy)]
 pub struct Shading {
     water_level: f64,
+    water_level_epsilon: f64,
     ambient_light: f64,
     light_dir: Vector3<f64>,
     palette: ColorPalette,
@@ -93,12 +97,14 @@ pub struct Shading {
 impl Shading {
     pub fn new(
         water_level: f64,
+        water_level_epsilon: f64,
         ambient_light: f64,
         light_dir: Vector3<f64>,
         palette: ColorPalette,
     ) -> Self {
         Self {
             water_level,
+            water_level_epsilon,
             ambient_light,
             light_dir,
             palette,
@@ -118,27 +124,19 @@ impl ColoringMethod for Shading {
 
         let color = if let PixelColor::Rgba(color) = pixel.color {
             Vector3::new(color.r, color.g, color.b)
-        } else if pixel.elevation <= self.water_level {
+        } else if pixel.elevation <= self.water_level + self.water_level_epsilon {
             self.palette.water_color()
         } else {
             self.palette.elev_to_color(pixel.elevation)
         } * brightness;
 
-        Rgb([
-            (color[0] * 255.0) as u8,
-            (color[1] * 255.0) as u8,
-            (color[2] * 255.0) as u8,
-        ])
+        crate::utils::vec3_to_rgb(color)
     }
 
     fn sky_color(&self) -> Rgb<u8> {
         let color = self.palette.sky_color();
 
-        Rgb([
-            (color[0] * 255.0) as u8,
-            (color[1] * 255.0) as u8,
-            (color[2] * 255.0) as u8,
-        ])
+        crate::utils::vec3_to_rgb(color)
     }
 
     fn fog_color(&self) -> Rgb<u8> {
