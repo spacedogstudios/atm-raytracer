@@ -3,3 +3,8 @@
 Cargo.lock
 *.png
 *.dat
+
+# Local data and personal configs
+/terrain/
+/terrain-tif/
+/yaml/
